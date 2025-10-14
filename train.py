@@ -237,7 +237,7 @@ def train_model(
             **training_kwargs,        # keep your other settings
             'checkpoint_directory': './checkpoints',  # where to store checkpoints
             'checkpoint_frequency': 2,                # save every 2 epochs
-            'checkpoint_name': 'conve_checkpoint',    # base name
+            'checkpoint_name': 'conve_checkpoint_epoch_{epoch:05d}.pt',  # epoch tag    # base name
             'checkpoint_on_failure': True,            # also save if interrupted
         },
         # Optimizer
