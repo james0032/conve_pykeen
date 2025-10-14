@@ -233,7 +233,13 @@ def train_model(
         loss='BCEWithLogitsLoss',
         # Training
         training_loop='sLCWA',
-        training_kwargs=training_kwargs,
+        training_kwargs={
+            **training_kwargs,        # keep your other settings
+            'checkpoint_directory': './checkpoints',  # where to store checkpoints
+            'checkpoint_frequency': 2,                # save every 2 epochs
+            'checkpoint_name': 'conve_checkpoint',    # base name
+            'checkpoint_on_failure': True,            # also save if interrupted
+        },
         # Optimizer
         optimizer='Adam',
         optimizer_kwargs={
@@ -251,7 +257,7 @@ def train_model(
         stopper='early' if early_stopping else None,
         stopper_kwargs={
             'patience': patience,
-            'frequency': 1,
+            'frequency': 1000,
             'metric': 'hits@10',
         } if early_stopping else None,
         # Other
