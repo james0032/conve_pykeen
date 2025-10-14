@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: conve-pykeen-training
+spec:
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 1187
+    fsGroup: 1187
+  containers:
+  - name: conve-pykeen
+    image: nvcr.io/nvidia/pyg:24.05-py3
+    tty: true
+    stdin: true
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "=========================================="
+        echo "ConvE PyKEEN Training Pod"
+        echo "=========================================="
+        echo ""
+        echo "Installing requirements..."
+        cd /workspace/conve_pykeen
+        pip install -r requirements.txt
+        echo ""
+        echo "Installation complete!"
+        echo ""
+        echo "Available commands:"
+        echo "  - Preprocess: python preprocess.py --help"
+        echo "  - Train: python train.py --help"
+        echo "  - Predict: python predict.py --help"
+        echo "  - TracIn: python run_tracin.py --help"
+        echo "  - Pipeline: ./run_pipeline.sh <data_dir> <output_dir>"
+        echo ""
+        echo "Data locations:"
+        echo "  - Local workspace: /workspace/data"
+        echo "  - NFS mount: /projects/aixb/jchung"
+        echo ""
+        echo "=========================================="
+        exec /bin/bash
+    resources:
+      limits:
+        cpu: '3'
+        memory: 248G
+        ephemeral-storage: 1G
+        # GPU options (uncomment one):
+        #nvidia.com/mig-1g.5gb: 1
+        #nvidia.com/mig-2g.10gb: 1
+        nvidia.com/mig-3g.20gb: 1
+        #nvidia.com/mig-7g.40gb: 1
+      requests:
+        cpu: '3'
+        memory: 248G
+        ephemeral-storage: 1G
+    volumeMounts:
+    - mountPath: "/workspace/data"
+      name: storage
+    - name: nfs
+      mountPath: "/projects/aixb/jchung"
+    - name: conve-code
+      mountPath: "/workspace/conve_pykeen"
+    workingDir: /workspace/conve_pykeen
+
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: nn-geo-storage
+  - name: nfs
+    nfs:
+      server: na-projects.edc.renci.org
+      path: /aixb/jchung
+  - name: conve-code
+    hostPath:
+      path: /path/to/conve_pykeen
+      type: Directory
+
+  restartPolicy: Never

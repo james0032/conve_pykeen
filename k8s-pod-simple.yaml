@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: conve-pykeen-training
+  labels:
+    app: conve-pykeen
+    type: training
+spec:
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 1187
+    fsGroup: 1187
+
+  containers:
+  - name: conve-pykeen
+    image: nvcr.io/nvidia/pyg:24.05-py3
+    tty: true
+    stdin: true
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        #!/bin/bash
+        set -e
+
+        echo "=========================================="
+        echo "ConvE PyKEEN Training Pod"
+        echo "=========================================="
+        echo ""
+
+        # Copy code from NFS if not already present
+        if [ ! -d "/workspace/conve_pykeen" ]; then
+          echo "Copying code from NFS..."
+          if [ -d "/projects/aixb/jchung/everycure/git/conve_pykeen" ]; then
+            cp -r /projects/aixb/jchung/everycure/git/conve_pykeen /workspace/
+            echo "✓ Code copied successfully"
+          else
+            echo "⚠ Warning: Code not found on NFS"
+            echo "  Expected location: /projects/aixb/jchung/everycure/git/conve_pykeen"
+            echo "  Please manually copy your code to /workspace/conve_pykeen"
+            mkdir -p /workspace/conve_pykeen
+          fi
+        fi
+
+        cd /workspace/conve_pykeen
+
+        # Install requirements if they exist
+        if [ -f "requirements.txt" ]; then
+          echo ""
+          echo "Installing Python dependencies..."
+          pip install --no-cache-dir -q -r requirements.txt
+          echo "✓ Dependencies installed"
+        else
+          echo "⚠ requirements.txt not found, installing core dependencies..."
+          pip install --no-cache-dir -q torch>=2.0.0 pykeen>=1.10.0 numpy pandas tqdm scikit-learn scipy
+        fi
+
+        echo ""
+        echo "=========================================="
+        echo "Environment Ready!"
+        echo "=========================================="
+        echo ""
+        echo "📁 Directory structure:"
+        echo "  - Code: /workspace/conve_pykeen"
+        echo "  - Data storage: /workspace/data"
+        echo "  - NFS mount: /projects/aixb/jchung"
+        echo ""
+        echo "🚀 Quick start commands:"
+        echo "  # Run full pipeline"
+        echo "  ./run_pipeline.sh /projects/aixb/jchung/data /workspace/output"
+        echo ""
+        echo "  # Or step by step:"
+        echo "  python preprocess.py --train ... --output-dir /workspace/data/processed"
+        echo "  python train.py --train ... --output-dir /workspace/output"
+        echo ""
+        echo "📖 For help:"
+        echo "  python train.py --help"
+        echo "  python predict.py --help"
+        echo "  python run_tracin.py --help"
+        echo ""
+        echo "=========================================="
+        echo ""
+
+        # Start interactive bash
+        exec /bin/bash
+
+    resources:
+      limits:
+        cpu: '3'
+        memory: 248G
+        ephemeral-storage: 1G
+        # GPU - uncomment the one you need:
+        #nvidia.com/mig-1g.5gb: 1
+        #nvidia.com/mig-2g.10gb: 1
+        nvidia.com/mig-3g.20gb: 1
+        #nvidia.com/mig-7g.40gb: 1
+      requests:
+        cpu: '3'
+        memory: 248G
+        ephemeral-storage: 1G
+
+    volumeMounts:
+    - name: storage
+      mountPath: "/workspace/data"
+    - name: nfs
+      mountPath: "/projects/aixb/jchung"
+    - name: workspace
+      mountPath: "/workspace"
+
+    workingDir: /workspace/conve_pykeen
+
+    env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
+    - name: TORCH_HOME
+      value: "/workspace/.cache/torch"
+    - name: HF_HOME
+      value: "/workspace/.cache/huggingface"
+
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: nn-geo-storage
+  - name: nfs
+    nfs:
+      server: na-projects.edc.renci.org
+      path: /aixb/jchung
+  - name: workspace
+    emptyDir:
+      sizeLimit: 100Gi
+
+  restartPolicy: Never

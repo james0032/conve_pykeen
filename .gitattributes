@@ -1,0 +1,18 @@
+# Git attributes for proper line endings
+* text=auto
+
+# Scripts should use LF
+*.sh text eol=lf
+*.py text eol=lf
+
+# Documentation
+*.md text
+
+# YAML files
+*.yaml text
+*.yml text
+
+# Don't diff large files
+*.pkl binary
+*.pth binary
+*.pt binary

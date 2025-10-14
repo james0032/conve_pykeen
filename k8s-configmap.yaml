@@ -1,0 +1,73 @@
+---
+# ConfigMap for requirements.txt
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conve-requirements
+data:
+  requirements.txt: |
+    # Core dependencies
+    torch>=2.0.0
+    pykeen>=1.10.0
+    numpy>=1.21.0
+    pandas>=1.3.0
+
+    # For evaluation and analysis
+    scikit-learn>=1.0.0
+    scipy>=1.7.0
+
+    # Progress bars and logging
+    tqdm>=4.62.0
+
+    # Data handling
+    click>=8.0.0
+
+---
+# ConfigMap for startup script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conve-startup
+data:
+  startup.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "=========================================="
+    echo "ConvE PyKEEN Training Pod"
+    echo "=========================================="
+    echo ""
+
+    # Check if code is already present
+    if [ ! -f "/workspace/conve_pykeen/train.py" ]; then
+        echo "Code not found. Please copy your code to /workspace/conve_pykeen/"
+        echo "or mount the code directory."
+        echo ""
+        echo "You can copy from NFS:"
+        echo "  cp -r /projects/aixb/jchung/conve_pykeen /workspace/"
+        echo ""
+    else
+        echo "Installing requirements..."
+        cd /workspace/conve_pykeen
+        pip install --quiet -r requirements.txt
+        echo "✓ Installation complete!"
+        echo ""
+        echo "Available commands:"
+        echo "  - Preprocess: python preprocess.py --help"
+        echo "  - Train: python train.py --help"
+        echo "  - Predict: python predict.py --help"
+        echo "  - TracIn: python run_tracin.py --help"
+        echo "  - Pipeline: ./run_pipeline.sh <data_dir> <output_dir>"
+        echo ""
+    fi
+
+    echo "Data locations:"
+    echo "  - Local workspace: /workspace/data"
+    echo "  - NFS mount: /projects/aixb/jchung"
+    echo "  - Code directory: /workspace/conve_pykeen"
+    echo ""
+    echo "=========================================="
+    echo ""
+
+    # Start interactive bash
+    exec /bin/bash

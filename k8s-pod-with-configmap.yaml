@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: conve-pykeen-training
+spec:
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 1187
+    fsGroup: 1187
+
+  initContainers:
+  - name: setup
+    image: nvcr.io/nvidia/pyg:24.05-py3
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "Copying code from NFS to workspace..."
+        if [ -d "/nfs-mount/everycure/git/conve_pykeen" ]; then
+          cp -r /nfs-mount/everycure/git/conve_pykeen /workspace/
+          echo "✓ Code copied successfully"
+        else
+          echo "⚠ Code not found at /nfs-mount/everycure/git/conve_pykeen"
+          echo "  Please ensure the code is available on NFS"
+        fi
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+    - name: nfs
+      mountPath: /nfs-mount
+
+  containers:
+  - name: conve-pykeen
+    image: nvcr.io/nvidia/pyg:24.05-py3
+    tty: true
+    stdin: true
+    command: ["/bin/bash", "/scripts/startup.sh"]
+    resources:
+      limits:
+        cpu: '3'
+        memory: 248G
+        ephemeral-storage: 1G
+        # GPU options (uncomment one):
+        #nvidia.com/mig-1g.5gb: 1
+        #nvidia.com/mig-2g.10gb: 1
+        nvidia.com/mig-3g.20gb: 1
+        #nvidia.com/mig-7g.40gb: 1
+      requests:
+        cpu: '3'
+        memory: 248G
+        ephemeral-storage: 1G
+    volumeMounts:
+    - name: storage
+      mountPath: "/workspace/data"
+    - name: nfs
+      mountPath: "/projects/aixb/jchung"
+    - name: workspace
+      mountPath: "/workspace"
+    - name: requirements
+      mountPath: "/tmp/requirements.txt"
+      subPath: requirements.txt
+    - name: startup-script
+      mountPath: "/scripts"
+    workingDir: /workspace/conve_pykeen
+    env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
+
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: nn-geo-storage
+  - name: nfs
+    nfs:
+      server: na-projects.edc.renci.org
+      path: /aixb/jchung
+  - name: workspace
+    emptyDir: {}
+  - name: requirements
+    configMap:
+      name: conve-requirements
+  - name: startup-script
+    configMap:
+      name: conve-startup
+      defaultMode: 0755
+
+  restartPolicy: Never
