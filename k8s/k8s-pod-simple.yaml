@@ -43,6 +43,11 @@ spec:
 
         cd /workspace/conve_pykeen
 
+        # Install system tools
+        echo ""
+        echo "Installing system utilities..."
+        apt-get update -qq && apt-get install -y -qq tmux screen > /dev/null 2>&1 || echo "⚠ Could not install tmux/screen"
+
         # Install requirements if they exist
         if [ -f "requirements.txt" ]; then
           echo ""
@@ -76,6 +81,16 @@ spec:
         echo "  python train.py --help"
         echo "  python predict.py --help"
         echo "  python run_tracin.py --help"
+        echo ""
+        echo "💡 Long-running tasks:"
+        echo "  # Use tmux for persistent sessions"
+        echo "  tmux new -s training"
+        echo "  # Run your training..."
+        echo "  # Detach: Ctrl+B, then D"
+        echo "  # Reattach: tmux attach -t training"
+        echo ""
+        echo "  # Or use nohup for background tasks"
+        echo "  nohup python train.py ... > training.log 2>&1 &"
         echo ""
         echo "=========================================="
         echo ""

@@ -101,6 +101,17 @@ python preprocess.py \
   --output-dir ./data/processed
 ```
 
+**Options:**
+- `--no-validate`: Skip validation of entities/relations (faster, but may include invalid triples)
+  ```bash
+  python preprocess.py ... --no-validate  # Skip validation checks
+  ```
+
+**What it does:**
+- By default, validates all entities exist in node_dict and all relations exist in rel_dict
+- Reports warnings for unknown entities/relations and filters them out
+- Use `--no-validate` to skip these checks if your data is already validated
+
 This will create:
 - `train.txt`, `valid.txt`, `test.txt` - Processed triples
 - `train_entity_to_id.tsv` - Entity mapping

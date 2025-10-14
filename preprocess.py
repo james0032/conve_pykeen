@@ -198,7 +198,8 @@ def split_data(
     node_dict_path: str,
     rel_dict_path: str,
     output_dir: str,
-    edge_map_path: str = None
+    edge_map_path: str = None,
+    validate: bool = True
 ):
     """Process and split data into train/valid/test sets for PyKEEN.
 
@@ -210,6 +211,7 @@ def split_data(
         rel_dict_path: Path to rel_dict file
         output_dir: Directory to save processed files
         edge_map_path: Optional path to edge_map.json
+        validate: Whether to validate entities and relations (default: True)
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -219,7 +221,7 @@ def split_data(
     train_out = os.path.join(output_dir, 'train.txt')
     train_triples, node_dict, rel_dict = preprocess_data(
         train_triple_path, node_dict_path, rel_dict_path,
-        train_out, edge_map_path
+        train_out, edge_map_path, validate
     )
 
     print("\n" + "=" * 60)
@@ -228,7 +230,7 @@ def split_data(
     valid_out = os.path.join(output_dir, 'valid.txt')
     valid_triples, _, _ = preprocess_data(
         valid_triple_path, node_dict_path, rel_dict_path,
-        valid_out, edge_map_path
+        valid_out, edge_map_path, validate
     )
 
     print("\n" + "=" * 60)
@@ -237,7 +239,7 @@ def split_data(
     test_out = os.path.join(output_dir, 'test.txt')
     test_triples, _, _ = preprocess_data(
         test_triple_path, node_dict_path, rel_dict_path,
-        test_out, edge_map_path
+        test_out, edge_map_path, validate
     )
 
     print("\n" + "=" * 60)
@@ -283,6 +285,10 @@ def parse_args():
         '--output-dir', '-o', type=str, required=True,
         help='Output directory for processed files'
     )
+    parser.add_argument(
+        '--no-validate', action='store_true',
+        help='Skip validation of entities and relations (default: validate)'
+    )
 
     return parser.parse_args()
 
@@ -297,7 +303,8 @@ def main():
         node_dict_path=args.node_dict,
         rel_dict_path=args.rel_dict,
         output_dir=args.output_dir,
-        edge_map_path=args.edge_map
+        edge_map_path=args.edge_map,
+        validate=not args.no_validate  # Invert no_validate to get validate
     )
 
 
