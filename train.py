@@ -200,6 +200,17 @@ def train_model(
     # Train model using PyKEEN pipeline
     logger.info("Starting training...")
 
+    # Prepare training kwargs - label smoothing only works with certain losses
+    training_kwargs = {
+        'num_epochs': num_epochs,
+        'batch_size': batch_size,
+    }
+
+    # Only add label smoothing if it's non-zero and using BCEWithLogits loss
+    if label_smoothing > 0:
+        training_kwargs['label_smoothing'] = label_smoothing
+        logger.info(f"Using label smoothing: {label_smoothing}")
+
     result = pipeline(
         # Data
         training=training,
@@ -218,13 +229,11 @@ def train_model(
             'embedding_height': embedding_height,
             'embedding_width': embedding_width,
         },
+        # Loss function - use BCEWithLogitsLoss which supports label smoothing
+        loss='BCEWithLogitsLoss',
         # Training
         training_loop='sLCWA',
-        training_kwargs={
-            'num_epochs': num_epochs,
-            'batch_size': batch_size,
-            'label_smoothing': label_smoothing,
-        },
+        training_kwargs=training_kwargs,
         # Optimizer
         optimizer='Adam',
         optimizer_kwargs={

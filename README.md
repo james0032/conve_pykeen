@@ -151,9 +151,22 @@ python train.py \
 --num-epochs 100                 # Number of training epochs
 --batch-size 256                 # Training batch size
 --learning-rate 0.001            # Learning rate (Adam optimizer)
---label-smoothing 0.1            # Label smoothing parameter
+--label-smoothing 0.1            # Label smoothing parameter (0.0 to disable)
 --patience 10                    # Early stopping patience
 --no-early-stopping              # Disable early stopping
+```
+
+**About Label Smoothing:**
+Label smoothing is a regularization technique that prevents overconfident predictions:
+- Default: `0.1` (10% smoothing) - recommended for most cases
+- Softens hard labels: `1.0 → 0.9`, `0.0 → 0.1`
+- Improves generalization and prevents overfitting
+- Set to `0.0` to disable: `--label-smoothing 0`
+- Uses `BCEWithLogitsLoss` which supports label smoothing
+
+**Example - Disable label smoothing:**
+```bash
+python train.py ... --label-smoothing 0
 ```
 
 **Other Options:**
@@ -373,6 +386,27 @@ Ensure `embedding_dim = embedding_height × embedding_width`:
 
 ### Index Mismatch
 Ensure you use the same node_dict and rel_dict for all train/valid/test splits.
+
+### Label Smoothing Error
+
+**Error:**
+```
+pykeen.losses.UnsupportedLabelSmoothingError: MarginRankingLoss does not support label smoothing.
+```
+
+**Solution:**
+This has been fixed in the current version. The model now uses `BCEWithLogitsLoss` which supports label smoothing.
+
+If you still encounter this error:
+```bash
+# Option 1: Disable label smoothing
+python train.py ... --label-smoothing 0
+
+# Option 2: Update to latest version
+git pull origin main
+```
+
+The default label smoothing (0.1) is recommended as it improves generalization.
 
 ## Citation
 
