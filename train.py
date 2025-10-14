@@ -204,6 +204,10 @@ def train_model(
     training_kwargs = {
         'num_epochs': num_epochs,
         'batch_size': batch_size,
+        'checkpoint_directory': './checkpoints',  # where to store checkpoints
+        'checkpoint_frequency': 2,                # save every 2 epochs
+        'checkpoint_name': 'conve_checkpoint',    # base name
+        'checkpoint_on_failure': True,            # also save if interrupted
     }
 
     # Only add label smoothing if it's non-zero and using BCEWithLogits loss
@@ -233,13 +237,7 @@ def train_model(
         loss='BCEWithLogitsLoss',
         # Training
         training_loop='sLCWA',
-        training_kwargs={
-            **training_kwargs,        # keep your other settings
-            'checkpoint_directory': './checkpoints',  # where to store checkpoints
-            'checkpoint_frequency': 2,                # save every 2 epochs
-            'checkpoint_name': 'conve_checkpoint_epoch_{epoch:05d}.pt',  # epoch tag    # base name
-            'checkpoint_on_failure': True,            # also save if interrupted
-        },
+        training_kwargs=training_kwargs,
         # Optimizer
         optimizer='Adam',
         optimizer_kwargs={
