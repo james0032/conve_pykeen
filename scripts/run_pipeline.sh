@@ -57,7 +57,7 @@ cd ${WORK_DIR}
 echo ""
 echo "Python environment:"
 python --version
-pip list | grep -E "(torch|pykeen|jsonlines|pandas|numpy)"
+# pip list | grep -E "(torch|pykeen|jsonlines|pandas|numpy)"
 echo ""
 
 # Validate input files exist
