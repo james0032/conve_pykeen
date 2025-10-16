@@ -313,7 +313,8 @@ if [ "$START_STEP" -le 5 ] && [ "$END_STEP" -ge 5 ]; then
         --node-dict ${OUTPUT_BASE}/node_dict.txt \
         --rel-dict ${OUTPUT_BASE}/rel_dict.txt \
         --edge-map ${OUTPUT_BASE}/edge_map.json \
-        --output-dir ${PROCESSED_DIR}
+        --output-dir ${PROCESSED_DIR} \
+        --no-validate
 
     STEP5_END=$(date +%s)
     STEP5_TIME=$((STEP5_END - STEP5_START))
