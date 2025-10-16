@@ -204,7 +204,7 @@ def train_model(
     training_kwargs = {
         'num_epochs': num_epochs,
         'batch_size': batch_size,
-        'checkpoint_directory': '/projects/aixb/jchung/checkpoints',  # where to store checkpoints
+        'checkpoint_directory': '/workspace/data/robokop/CGGD_alltreat/checkpoints',  # where to store checkpoints
         'checkpoint_frequency': 2,                # save every 2 epochs
         'checkpoint_name': 'conve_checkpoint',    # base name
         'checkpoint_on_failure': True,            # also save if interrupted
