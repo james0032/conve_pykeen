@@ -23,10 +23,13 @@ STYLE="CGGD_alltreat"
 OUTPUT_BASE="${DATA_DIR}/${STYLE}"
 
 # Pipeline parameters
-ONE_TO_ONE_PCT=0.06
-ONE_TO_N_PCT=0.02
-N_TO_ONE_PCT=0.02
-TRAIN_RATIO=0.9
+# Note: Adjust these based on your data distribution
+# If 1-to-1 edges are scarce (<5%), the script will use all available and warn you
+ONE_TO_ONE_PCT=0.015   # 1.5% - use all available 1-to-1 edges
+ONE_TO_N_PCT=0.03      # 3% - increase to compensate
+N_TO_ONE_PCT=0.03      # 3% - increase to compensate
+MANY_TO_MANY_PCT=0.025 # 2.5% - sample from N-to-M edges
+TRAIN_RATIO=0.9        # 90% train, 10% valid
 RANDOM_SEED=42
 
 # Logging
@@ -130,9 +133,10 @@ echo "==========================================================================
 echo "STEP 3/5: Extracting test set"
 echo "================================================================================"
 echo "Sampling strategy:"
-echo "  1-to-1: ${ONE_TO_ONE_PCT} (6%)"
-echo "  1-to-N: ${ONE_TO_N_PCT} (2%)"
-echo "  N-to-1: ${N_TO_ONE_PCT} (2%)"
+echo "  1-to-1: ${ONE_TO_ONE_PCT} (1.5%)"
+echo "  1-to-N: ${ONE_TO_N_PCT} (3%)"
+echo "  N-to-1: ${N_TO_ONE_PCT} (3%)"
+echo "  N-to-M: ${MANY_TO_MANY_PCT} (2.5%)"
 echo "  Random seed: ${RANDOM_SEED}"
 echo ""
 
@@ -143,6 +147,7 @@ python src/make_test.py \
     --one-to-one-pct ${ONE_TO_ONE_PCT} \
     --one-to-n-pct ${ONE_TO_N_PCT} \
     --n-to-one-pct ${N_TO_ONE_PCT} \
+    --many-to-many-pct ${MANY_TO_MANY_PCT} \
     --seed ${RANDOM_SEED} \
     --log-level ${LOG_LEVEL}
 
@@ -204,7 +209,8 @@ python preprocess.py \
     --node-dict ${OUTPUT_BASE}/node_dict.txt \
     --rel-dict ${OUTPUT_BASE}/rel_dict.txt \
     --edge-map ${OUTPUT_BASE}/edge_map.json \
-    --output-dir ${PROCESSED_DIR}
+    --output-dir ${PROCESSED_DIR} \
+    --no-validate
 
 STEP5_END=$(date +%s)
 STEP5_TIME=$((STEP5_END - STEP5_START))

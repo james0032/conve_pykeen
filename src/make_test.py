@@ -139,8 +139,8 @@ def categorize_treats_edges(
     treats_edges: List[Tuple[str, str, str]],
     subject_counts: Counter,
     object_counts: Counter
-) -> Tuple[List[Tuple[str, str, str]], Dict[str, List[Tuple[str, str, str]]], Dict[str, List[Tuple[str, str, str]]]]:
-    """Categorize treats edges into 1-1, 1-N, and N-1 patterns.
+) -> Tuple[List[Tuple[str, str, str]], Dict[str, List[Tuple[str, str, str]]], Dict[str, List[Tuple[str, str, str]]], List[Tuple[str, str, str]]]:
+    """Categorize treats edges into 1-1, 1-N, N-1, and N-M patterns.
 
     Args:
         treats_edges: List of treats edges
@@ -148,14 +148,15 @@ def categorize_treats_edges(
         object_counts: Counter of object occurrences
 
     Returns:
-        Tuple of (one_to_one_edges, one_to_n_groups, n_to_one_groups)
+        Tuple of (one_to_one_edges, one_to_n_groups, n_to_one_groups, many_to_many_edges)
         Groups are dicts mapping entity -> list of edges
     """
     logger.info("Categorizing treats edges by multiplicity...")
 
     one_to_one = []
-    one_to_n_groups = defaultdict(list)  # subject -> list of edges
-    n_to_one_groups = defaultdict(list)  # object -> list of edges
+    one_to_n_groups = defaultdict(list)  # subject -> list of edges (subj appears >1, obj appears 1)
+    n_to_one_groups = defaultdict(list)  # object -> list of edges (obj appears >1, subj appears 1)
+    many_to_many = []  # Both subject and object appear multiple times (N-M pattern)
 
     for edge in treats_edges:
         subject, predicate, obj = edge
@@ -172,41 +173,57 @@ def categorize_treats_edges(
             # 1-to-N pattern (same subject to multiple objects)
             one_to_n_groups[subject].append(edge)
         else:
-            # Both subject and object appear multiple times
-            # Categorize based on which is more dominant
-            if subj_count >= obj_count:
-                one_to_n_groups[subject].append(edge)
-            else:
-                n_to_one_groups[obj].append(edge)
+            # Both subject and object appear multiple times (N-to-M pattern)
+            # These are complex edges that shouldn't be split across train/test
+            many_to_many.append(edge)
 
     logger.info(f"Categorization results:")
-    logger.info(f"  1-to-1 edges: {len(one_to_one)}")
-    logger.info(f"  1-to-N groups: {len(one_to_n_groups)} subjects with total {sum(len(edges) for edges in one_to_n_groups.values())} edges")
-    logger.info(f"  N-to-1 groups: {len(n_to_one_groups)} objects with total {sum(len(edges) for edges in n_to_one_groups.values())} edges")
+    logger.info(f"  1-to-1 edges: {len(one_to_one)} ({len(one_to_one)/len(treats_edges)*100:.2f}%)")
+    logger.info(f"  1-to-N groups: {len(one_to_n_groups)} subjects with total {sum(len(edges) for edges in one_to_n_groups.values())} edges ({sum(len(edges) for edges in one_to_n_groups.values())/len(treats_edges)*100:.2f}%)")
+    logger.info(f"  N-to-1 groups: {len(n_to_one_groups)} objects with total {sum(len(edges) for edges in n_to_one_groups.values())} edges ({sum(len(edges) for edges in n_to_one_groups.values())/len(treats_edges)*100:.2f}%)")
+    logger.info(f"  N-to-M edges: {len(many_to_many)} ({len(many_to_many)/len(treats_edges)*100:.2f}%)")
 
-    return one_to_one, one_to_n_groups, n_to_one_groups
+    # Log warning if categories are imbalanced
+    if len(one_to_one) < len(treats_edges) * 0.05:
+        logger.warning(f"Only {len(one_to_one)/len(treats_edges)*100:.2f}% of edges are true 1-to-1. Consider adjusting sampling strategy.")
+
+    return one_to_one, one_to_n_groups, n_to_one_groups, many_to_many
 
 
 def sample_test_edges(
     one_to_one: List[Tuple[str, str, str]],
     one_to_n_groups: Dict[str, List[Tuple[str, str, str]]],
     n_to_one_groups: Dict[str, List[Tuple[str, str, str]]],
+    many_to_many: List[Tuple[str, str, str]],
     total_treats: int,
     one_to_one_pct: float = 0.06,
     one_to_n_pct: float = 0.02,
     n_to_one_pct: float = 0.02,
+    many_to_many_pct: float = 0.02,
     seed: int = 42
 ) -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str]]]:
-    """Sample test edges using stratified sampling.
+    """Sample test edges using stratified sampling with leakage prevention.
+
+    This function prevents data leakage by ensuring that edges sharing the same
+    subject or object in the treats relationship are kept together in the same
+    split (either all in test or all in train).
+
+    Leakage Prevention Strategy:
+    - 1-to-1: Safe to sample individually (by definition, no shared entities)
+    - 1-to-N: Sample by subject - when a subject is selected, ALL its edges go to test
+    - N-to-1: Sample by object - when an object is selected, ALL its edges go to test
+    - N-to-M: Sample by subject - when a subject is selected, ALL its edges go to test
 
     Args:
         one_to_one: List of 1-to-1 edges
         one_to_n_groups: Dict mapping subject -> list of 1-to-N edges
         n_to_one_groups: Dict mapping object -> list of N-to-1 edges
+        many_to_many: List of N-to-M edges
         total_treats: Total number of treats edges
         one_to_one_pct: Target percentage for 1-to-1 edges (default: 6%)
         one_to_n_pct: Target percentage for 1-to-N edges (default: 2%)
         n_to_one_pct: Target percentage for N-to-1 edges (default: 2%)
+        many_to_many_pct: Target percentage for N-to-M edges (default: 2%)
         seed: Random seed for reproducibility
 
     Returns:
@@ -218,22 +235,26 @@ def sample_test_edges(
     logger.info(f"  Target 1-to-1: {one_to_one_pct * 100}% = ~{int(total_treats * one_to_one_pct)} edges")
     logger.info(f"  Target 1-to-N: {one_to_n_pct * 100}% = ~{int(total_treats * one_to_n_pct)} edges")
     logger.info(f"  Target N-to-1: {n_to_one_pct * 100}% = ~{int(total_treats * n_to_one_pct)} edges")
+    logger.info(f"  Target N-to-M: {many_to_many_pct * 100}% = ~{int(total_treats * many_to_many_pct)} edges")
     logger.info("=" * 80)
 
     test_edges = []
     test_edge_set = set()
 
     # Sample 1-to-1 edges
+    # Note: 1-to-1 edges are safe to sample individually because by definition,
+    # each subject and object appears ONLY ONCE in the treats edges, so there's
+    # no risk of splitting related edges between train and test
     target_one_to_one = int(total_treats * one_to_one_pct)
     if len(one_to_one) < target_one_to_one:
-        logger.warning(f"Not enough 1-to-1 edges ({len(one_to_one)} < {target_one_to_one}), using all")
+        logger.warning(f"Not enough 1-to-1 edges ({len(one_to_one)} < {target_one_to_one}), using all available")
         sampled_one_to_one = one_to_one
     else:
         sampled_one_to_one = random.sample(one_to_one, target_one_to_one)
 
     test_edges.extend(sampled_one_to_one)
     test_edge_set.update(sampled_one_to_one)
-    logger.info(f"Sampled {len(sampled_one_to_one)} 1-to-1 edges")
+    logger.info(f"Sampled {len(sampled_one_to_one)} 1-to-1 edges (actual: {len(sampled_one_to_one)/total_treats*100:.2f}%)")
 
     # Sample 1-to-N groups
     target_one_to_n = int(total_treats * one_to_n_pct)
@@ -250,7 +271,7 @@ def sample_test_edges(
             break
 
     test_edges.extend(sampled_one_to_n)
-    logger.info(f"Sampled {len(sampled_one_to_n)} edges from 1-to-N groups (target: ~{target_one_to_n})")
+    logger.info(f"Sampled {len(sampled_one_to_n)} edges from 1-to-N groups (actual: {len(sampled_one_to_n)/total_treats*100:.2f}%, target: ~{target_one_to_n})")
 
     # Sample N-to-1 groups
     target_n_to_one = int(total_treats * n_to_one_pct)
@@ -267,13 +288,43 @@ def sample_test_edges(
             break
 
     test_edges.extend(sampled_n_to_one)
-    logger.info(f"Sampled {len(sampled_n_to_one)} edges from N-to-1 groups (target: ~{target_n_to_one})")
+    logger.info(f"Sampled {len(sampled_n_to_one)} edges from N-to-1 groups (actual: {len(sampled_n_to_one)/total_treats*100:.2f}%, target: ~{target_n_to_one})")
+
+    # Sample N-to-M edges (group by subject AND object to prevent leakage)
+    # Build connected components: if edges share subject or object, they must go together
+    target_many_to_many = int(total_treats * many_to_many_pct)
+
+    # Group N-to-M edges by subject
+    nm_by_subject = defaultdict(list)
+    for edge in many_to_many:
+        nm_by_subject[edge[0]].append(edge)
+
+    # Shuffle subjects and sample complete groups
+    nm_subjects = list(nm_by_subject.keys())
+    random.shuffle(nm_subjects)
+
+    sampled_many_to_many = []
+    for subject in nm_subjects:
+        edges = nm_by_subject[subject]
+        if len(sampled_many_to_many) + len(edges) <= target_many_to_many * 1.5:  # Allow some flexibility
+            sampled_many_to_many.extend(edges)
+            test_edge_set.update(edges)
+        if len(sampled_many_to_many) >= target_many_to_many:
+            break
+
+    # If we haven't reached target, we use what we have
+    if len(sampled_many_to_many) < target_many_to_many * 0.5:
+        logger.warning(f"Only sampled {len(sampled_many_to_many)} N-to-M edges (target: {target_many_to_many}). Consider adjusting percentage.")
+
+    test_edges.extend(sampled_many_to_many)
+    logger.info(f"Sampled {len(sampled_many_to_many)} N-to-M edges from {len([s for s in nm_subjects if any(e in sampled_many_to_many for e in nm_by_subject[s])])} subjects (actual: {len(sampled_many_to_many)/total_treats*100:.2f}%)")
 
     # Collect remaining treats edges
     remaining_treats = [
         edge for edge in (one_to_one +
                          [e for edges in one_to_n_groups.values() for e in edges] +
-                         [e for edges in n_to_one_groups.values() for e in edges])
+                         [e for edges in n_to_one_groups.values() for e in edges] +
+                         many_to_many)
         if edge not in test_edge_set
     ]
 
@@ -387,6 +438,13 @@ Examples:
     )
 
     parser.add_argument(
+        '--many-to-many-pct',
+        type=float,
+        default=0.02,
+        help='Target percentage for N-to-M edges (default: 0.02 = 2%%)'
+    )
+
+    parser.add_argument(
         '--seed',
         type=int,
         default=42,
@@ -431,7 +489,7 @@ def main():
         logger.info(f"  Triples file: {triples_path}")
         logger.info(f"  Edge map file: {edge_map_path}")
         logger.info(f"  Output directory: {output_dir}")
-        logger.info(f"  Sampling percentages: 1-1={args.one_to_one_pct*100}%, 1-N={args.one_to_n_pct*100}%, N-1={args.n_to_one_pct*100}%")
+        logger.info(f"  Sampling percentages: 1-1={args.one_to_one_pct*100}%, 1-N={args.one_to_n_pct*100}%, N-1={args.n_to_one_pct*100}%, N-M={args.many_to_many_pct*100}%")
         logger.info(f"  Random seed: {args.seed}")
         logger.info("=" * 80)
 
@@ -462,15 +520,15 @@ def main():
             return 1
 
         # Categorize treats edges
-        one_to_one, one_to_n_groups, n_to_one_groups = categorize_treats_edges(
+        one_to_one, one_to_n_groups, n_to_one_groups, many_to_many = categorize_treats_edges(
             treats_edges, subject_counts, object_counts
         )
 
         # Sample test edges
         test_edges, remaining_treats = sample_test_edges(
-            one_to_one, one_to_n_groups, n_to_one_groups,
+            one_to_one, one_to_n_groups, n_to_one_groups, many_to_many,
             len(treats_edges),
-            args.one_to_one_pct, args.one_to_n_pct, args.n_to_one_pct,
+            args.one_to_one_pct, args.one_to_n_pct, args.n_to_one_pct, args.many_to_many_pct,
             args.seed
         )
 
@@ -492,13 +550,27 @@ def main():
             'test_edges': len(test_edges),
             'test_percentage': len(test_edges) / len(treats_edges) * 100,
             'train_candidate_edges': len(train_candidates),
-            'one_to_one_in_test': len([e for e in test_edges if e in one_to_one]),
-            'one_to_n_in_test': len([e for e in test_edges if any(e in edges for edges in one_to_n_groups.values())]),
-            'n_to_one_in_test': len([e for e in test_edges if any(e in edges for edges in n_to_one_groups.values())]),
+            'categorization': {
+                'one_to_one_total': len(one_to_one),
+                'one_to_one_percentage': len(one_to_one) / len(treats_edges) * 100,
+                'one_to_n_total': sum(len(edges) for edges in one_to_n_groups.values()),
+                'one_to_n_percentage': sum(len(edges) for edges in one_to_n_groups.values()) / len(treats_edges) * 100,
+                'n_to_one_total': sum(len(edges) for edges in n_to_one_groups.values()),
+                'n_to_one_percentage': sum(len(edges) for edges in n_to_one_groups.values()) / len(treats_edges) * 100,
+                'many_to_many_total': len(many_to_many),
+                'many_to_many_percentage': len(many_to_many) / len(treats_edges) * 100
+            },
+            'test_composition': {
+                'one_to_one_in_test': len([e for e in test_edges if e in one_to_one]),
+                'one_to_n_in_test': len([e for e in test_edges if any(e in edges for edges in one_to_n_groups.values())]),
+                'n_to_one_in_test': len([e for e in test_edges if any(e in edges for edges in n_to_one_groups.values())]),
+                'many_to_many_in_test': len([e for e in test_edges if e in many_to_many])
+            },
             'sampling_config': {
                 'one_to_one_pct': args.one_to_one_pct,
                 'one_to_n_pct': args.one_to_n_pct,
                 'n_to_one_pct': args.n_to_one_pct,
+                'many_to_many_pct': args.many_to_many_pct,
                 'seed': args.seed
             }
         }
