@@ -38,11 +38,8 @@ RANDOM_SEED=42
 # Logging
 LOG_LEVEL="INFO"
 
-# Python environment (modify as needed)
-# Uncomment and modify one of these based on your setup:
-# source ${BASE_DIR}/venv/bin/activate
-# conda activate pykeen
-# module load python/3.9
+# Python environment
+source /home/jchung/environments/conve_pykeen/.venv/bin/activate
 
 echo "================================================================================"
 echo "ROBOKOP Knowledge Graph Subgraph Preprocessing Pipeline"
