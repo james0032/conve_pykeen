@@ -104,8 +104,8 @@ spec:
         memory: 248G
         ephemeral-storage: 1G
         # GPU - uncomment the one you need:
-        #nvidia.com/mig-1g.5gb: 1
-        nvidia.com/mig-2g.10gb: 1
+        nvidia.com/mig-1g.5gb: 1
+        #nvidia.com/mig-2g.10gb: 1
         #nvidia.com/mig-3g.20gb: 1
         #nvidia.com/mig-7g.40gb: 1
       requests:
