@@ -1,13 +1,7 @@
-#!/bin/bash -l
+#!/bin/bash
 
-#SBATCH --partition=gpu
-#SBATCH --nodelist=gpu-6-1
-#SBATCH --nodes=1 --ntasks=24
-#SBATCH --mem=600G --gres=gpu:1 --time=10-0:00
-#SBATCH --job-name=ROBOKOPKG_subgraph_preprocess
-#SBATCH --output=/projects/aixb/jchung/everycure/influence_estimate/sjob_logs/pipeline_%j.out
-#SBATCH --mail-user=jchung@renci.org
-#SBATCH --mail-type=ALL
+# Pipeline script for running in Kubernetes pod
+# No SLURM configuration needed
 
 # Exit on error
 set -e
@@ -16,9 +10,9 @@ set -e
 set -x
 
 # Configuration variables
-BASE_DIR="/projects/aixb/jchung/everycure"
-WORK_DIR="${BASE_DIR}/git/conve_pykeen"
-DATA_DIR="${BASE_DIR}/influence_estimate/robokop"
+BASE_DIR="/workspace"
+WORK_DIR="${BASE_DIR}/conve_pykeen"
+DATA_DIR="${BASE_DIR}/data/robokop"
 
 # Input files
 NODE_FILE="${DATA_DIR}/nodes.jsonl"
@@ -43,15 +37,11 @@ RANDOM_SEED=42
 # Logging
 LOG_LEVEL="INFO"
 
-# Python environment
-source /home/jchung/environments/conve_pykeen/.venv/bin/activate
-
 echo "================================================================================"
-echo "ROBOKOP Knowledge Graph Subgraph Preprocessing Pipeline"
+echo "ROBOKOP Knowledge Graph Subgraph Preprocessing Pipeline (Pod)"
 echo "================================================================================"
 echo "Start time: $(date)"
-echo "Job ID: ${SLURM_JOB_ID}"
-echo "Node: ${SLURMD_NODENAME}"
+echo "Hostname: $(hostname)"
 echo "Working directory: ${WORK_DIR}"
 echo "================================================================================"
 
@@ -62,7 +52,7 @@ cd ${WORK_DIR}
 echo ""
 echo "Python environment:"
 python --version
-# pip list | grep -E "(torch|pykeen|jsonlines|pandas|numpy)"
+pip list | grep -E "(torch|pykeen|jsonlines|pandas|numpy)" || echo "Package list not available"
 echo ""
 
 # Validate input files exist
@@ -179,7 +169,7 @@ echo ""
 echo "================================================================================"
 echo "STEP 4/5: Splitting train/validation sets"
 echo "================================================================================"
-echo "Split ratio: ${TRAIN_RATIO} train / $((1 - TRAIN_RATIO)) valid"
+echo "Split ratio: ${TRAIN_RATIO} train / $(awk "BEGIN {print 1 - ${TRAIN_RATIO}}") valid"
 echo "Random seed: ${RANDOM_SEED}"
 echo ""
 
