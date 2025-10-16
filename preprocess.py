@@ -93,7 +93,8 @@ def preprocess_data(
     rel_dict_path: str,
     output_path: str,
     edge_map_path: str = None,
-    validate: bool = True
+    validate: bool = True,
+    save_mappings: bool = True
 ) -> Tuple[pd.DataFrame, Dict[str, int], Dict[str, int]]:
     """Preprocess triple data for PyKEEN.
 
@@ -104,6 +105,7 @@ def preprocess_data(
         output_path: Path to save processed triples
         edge_map_path: Optional path to edge_map.json
         validate: Whether to validate indices match the dictionaries
+        save_mappings: Whether to save entity/relation mappings (default: True)
 
     Returns:
         Tuple of (processed_triples, node_dict, rel_dict)
@@ -163,23 +165,24 @@ def preprocess_data(
     filtered_triples.to_csv(output_path, sep='\t', header=False, index=False)
     print(f"Saved processed triples to {output_path}")
 
-    # Save entity and relation mappings for PyKEEN
-    entity_map_path = output_path.replace('.txt', '_entity_to_id.tsv')
-    relation_map_path = output_path.replace('.txt', '_relation_to_id.tsv')
+    # Save entity and relation mappings for PyKEEN (only if requested)
+    if save_mappings:
+        entity_map_path = output_path.replace('.txt', '_entity_to_id.tsv')
+        relation_map_path = output_path.replace('.txt', '_relation_to_id.tsv')
 
-    # Create sorted mappings by index
-    entities_sorted = sorted(node_dict.items(), key=lambda x: x[1])
-    relations_sorted = sorted(rel_dict.items(), key=lambda x: x[1])
+        # Create sorted mappings by index
+        entities_sorted = sorted(node_dict.items(), key=lambda x: x[1])
+        relations_sorted = sorted(rel_dict.items(), key=lambda x: x[1])
 
-    with open(entity_map_path, 'w') as f:
-        for entity, idx in entities_sorted:
-            f.write(f"{entity}\t{idx}\n")
-    print(f"Saved entity mapping to {entity_map_path}")
+        with open(entity_map_path, 'w') as f:
+            for entity, idx in entities_sorted:
+                f.write(f"{entity}\t{idx}\n")
+        print(f"Saved entity mapping to {entity_map_path}")
 
-    with open(relation_map_path, 'w') as f:
-        for relation, idx in relations_sorted:
-            f.write(f"{relation}\t{idx}\n")
-    print(f"Saved relation mapping to {relation_map_path}")
+        with open(relation_map_path, 'w') as f:
+            for relation, idx in relations_sorted:
+                f.write(f"{relation}\t{idx}\n")
+        print(f"Saved relation mapping to {relation_map_path}")
 
     # Print statistics
     print("\nDataset Statistics:")
@@ -215,13 +218,37 @@ def split_data(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    print("=" * 60)
+    # Load the shared node and relation dictionaries
+    print("Loading shared entity and relation mappings...")
+    node_dict = load_node_dict(node_dict_path)
+    rel_dict = load_rel_dict(rel_dict_path)
+    print(f"  Loaded {len(node_dict)} entities")
+    print(f"  Loaded {len(rel_dict)} relations")
+
+    # Save entity and relation mappings ONCE for all splits
+    entity_map_path = os.path.join(output_dir, 'entity_to_id.tsv')
+    relation_map_path = os.path.join(output_dir, 'relation_to_id.tsv')
+
+    entities_sorted = sorted(node_dict.items(), key=lambda x: x[1])
+    relations_sorted = sorted(rel_dict.items(), key=lambda x: x[1])
+
+    with open(entity_map_path, 'w') as f:
+        for entity, idx in entities_sorted:
+            f.write(f"{entity}\t{idx}\n")
+    print(f"Saved shared entity mapping to {entity_map_path}")
+
+    with open(relation_map_path, 'w') as f:
+        for relation, idx in relations_sorted:
+            f.write(f"{relation}\t{idx}\n")
+    print(f"Saved shared relation mapping to {relation_map_path}")
+
+    print("\n" + "=" * 60)
     print("Processing Training Data")
     print("=" * 60)
     train_out = os.path.join(output_dir, 'train.txt')
-    train_triples, node_dict, rel_dict = preprocess_data(
+    train_triples, _, _ = preprocess_data(
         train_triple_path, node_dict_path, rel_dict_path,
-        train_out, edge_map_path, validate
+        train_out, edge_map_path, validate, save_mappings=False
     )
 
     print("\n" + "=" * 60)
@@ -230,7 +257,7 @@ def split_data(
     valid_out = os.path.join(output_dir, 'valid.txt')
     valid_triples, _, _ = preprocess_data(
         valid_triple_path, node_dict_path, rel_dict_path,
-        valid_out, edge_map_path, validate
+        valid_out, edge_map_path, validate, save_mappings=False
     )
 
     print("\n" + "=" * 60)
@@ -239,7 +266,7 @@ def split_data(
     test_out = os.path.join(output_dir, 'test.txt')
     test_triples, _, _ = preprocess_data(
         test_triple_path, node_dict_path, rel_dict_path,
-        test_out, edge_map_path, validate
+        test_out, edge_map_path, validate, save_mappings=False
     )
 
     print("\n" + "=" * 60)
@@ -250,6 +277,9 @@ def split_data(
     print(f"Test triples: {len(test_triples)}")
     print(f"Total: {len(train_triples) + len(valid_triples) + len(test_triples)}")
     print(f"\nOutput directory: {output_dir}")
+    print(f"\nShared mapping files:")
+    print(f"  Entity mapping: {entity_map_path}")
+    print(f"  Relation mapping: {relation_map_path}")
 
 
 def parse_args():
