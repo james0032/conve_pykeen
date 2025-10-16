@@ -102,7 +102,7 @@ spec:
       limits:
         cpu: '3'
         memory: 248G
-        ephemeral-storage: 1G
+        ephemeral-storage: 4Gi
         # GPU - uncomment the one you need:
         #nvidia.com/mig-1g.5gb: 1
         #nvidia.com/mig-2g.10gb: 1
@@ -111,7 +111,7 @@ spec:
       requests:
         cpu: '3'
         memory: 248G
-        ephemeral-storage: 1G
+        ephemeral-storage: 1Gi
 
     volumeMounts:
     - name: storage
