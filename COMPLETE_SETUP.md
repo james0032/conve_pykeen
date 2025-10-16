@@ -174,7 +174,8 @@ python train.py \
   --output-dir output/model \
   --num-epochs 100 \
   --batch-size 256 \
-  --learning-rate 0.001
+  --learning-rate 0.001 \
+  --label-smoothing 0.1  # Optional: 0.0 to disable, default is 0.1
 ```
 
 ### Prediction
@@ -261,6 +262,18 @@ cp -r /projects/aixb/jchung/everycure/git/conve_pykeen /workspace/
 cd /workspace/conve_pykeen
 pip install -r requirements.txt
 ```
+
+### Label Smoothing Error
+```
+pykeen.losses.UnsupportedLabelSmoothingError: MarginRankingLoss does not support label smoothing.
+```
+
+**Fixed in current version.** The model now uses `BCEWithLogitsLoss`. If you still see this:
+```bash
+python train.py ... --label-smoothing 0  # Disable label smoothing
+```
+
+Label smoothing (default: 0.1) helps prevent overfitting and is recommended.
 
 ## 🔄 Next Steps
 

@@ -147,6 +147,20 @@ python train.py ... --num-epochs 10
 
 Ensure your test data only contains entities and relations that appear in the training data. The preprocessing script automatically filters unknown entities.
 
+### Label Smoothing Error
+
+If you see:
+```
+pykeen.losses.UnsupportedLabelSmoothingError: MarginRankingLoss does not support label smoothing.
+```
+
+**Solution:** Update to the latest version (this is fixed). Or disable label smoothing:
+```bash
+python train.py ... --label-smoothing 0
+```
+
+**Note:** Label smoothing (default: 0.1) is recommended as it improves generalization.
+
 ## Next Steps
 
 1. **Tune Hyperparameters**: Adjust embedding dimensions, dropout rates, learning rate
