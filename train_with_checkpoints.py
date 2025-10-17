@@ -197,7 +197,7 @@ def train_with_checkpoints(
         # Train for one epoch
         losses = training_loop.train(
             triples_factory=training,
-            num_epochs=1,
+            num_epochs=epoch,
             batch_size=batch_size,
         )
 
