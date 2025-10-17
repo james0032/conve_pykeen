@@ -146,7 +146,7 @@ def main():
         entity_to_id=entity_to_id,
         relation_to_id=relation_to_id
     )
-    logger.info(f"Loaded {len(test_triples)} test triples")
+    logger.info(f"Loaded {(test_triples.num_triples)} test triples")
 
     # Load entity names
     idx_to_name = load_node_names(str(node_name_dict_path))
