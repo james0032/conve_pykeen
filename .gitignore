@@ -39,6 +39,7 @@ ENV/
 data/
 *.pkl
 *.tsv
+!single_test_triple_permethrin_scabies.tsv
 *.txt
 !requirements.txt
 *.csv
