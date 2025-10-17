@@ -182,7 +182,7 @@ class DetailedEvaluator:
         Returns:
             List of dictionaries with head, relation, tail, and score
         """
-        logger.info(f"Scoring {len(test_triples)} test triples (no ranking)...")
+        logger.info(f"Scoring {test_triples.num_triples} test triples (no ranking)...")
 
         # Get ID-to-label mappings if labels requested
         if include_labels:
@@ -255,7 +255,7 @@ class DetailedEvaluator:
         Returns:
             Dictionary with aggregated metrics and per-triple results
         """
-        logger.info(f"Evaluating {len(test_triples)} test triples...")
+        logger.info(f"Evaluating {test_triples.num_triples} test triples...")
 
         # Build set of known triples for filtering
         known_triples = set()
