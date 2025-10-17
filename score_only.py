@@ -19,7 +19,7 @@ import pickle
 import pandas as pd
 import torch
 from pykeen.triples import TriplesFactory
-
+from pykeen.models import Model
 from evaluate import DetailedEvaluator
 
 logging.basicConfig(
@@ -107,7 +107,8 @@ def main():
     # Load model
     logger.info(f"Loading model from {args.model_dir}...")
     model_path = Path(args.model_dir) / 'trained_model.pkl'
-    model = torch.load(args.model_dir)
+    #model = torch.load(args.model_dir)
+    model = Model.from_directory(args.model_dir)
     logger.info(f"Model loaded: {model}")
 
     # Load test triples
@@ -153,7 +154,7 @@ def main():
 
     # Create evaluator
     evaluator = DetailedEvaluator(
-        model=model.model_state_dict,
+        model=model.model,
         filter_triples=False,  # No filtering needed for score-only
         device=args.device
     )
