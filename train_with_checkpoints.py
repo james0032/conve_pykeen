@@ -220,7 +220,7 @@ def train_with_checkpoints(
 
         # Evaluate and early stopping check
         if stopper is not None:
-            should_stop = stopper.should_stop()
+            should_stop = stopper.should_stop(epoch=epoch)
             if should_stop:
                 logger.info(f"Early stopping triggered at epoch {epoch}")
                 break

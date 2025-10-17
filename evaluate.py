@@ -52,6 +52,39 @@ class DetailedEvaluator:
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
 
+    def score_triple(
+        self,
+        head: int,
+        relation: int,
+        tail: int
+    ) -> float:
+        """Get the ConvE score for a specific triple WITHOUT computing rankings.
+
+        This is much faster than evaluate_triple() when you only need the score
+        and don't need rank, MRR, or hits@k metrics.
+
+        Args:
+            head: Head entity index
+            relation: Relation index
+            tail: Tail entity index
+
+        Returns:
+            Model score for the triple (higher = more confident)
+        """
+        self.model.eval()
+
+        with torch.no_grad():
+            # Create batch with single triple
+            hr_batch = torch.LongTensor([[head, relation]]).to(self.device)
+
+            # Score all possible tails
+            all_scores = self.model.score_t(hr_batch).squeeze(0)  # Shape: (num_entities,)
+
+            # Get the score for the true tail - THIS IS THE CONVE SCORE
+            true_score = all_scores[tail].item()
+
+        return true_score
+
     def evaluate_triple(
         self,
         head: int,
@@ -59,7 +92,10 @@ class DetailedEvaluator:
         tail: int,
         known_triples: Optional[set] = None
     ) -> Dict[str, any]:
-        """Evaluate a single triple and return detailed results.
+        """Evaluate a single triple and return detailed results INCLUDING rankings.
+
+        This computes the full ranking which is expensive. If you only need the score,
+        use score_triple() instead.
 
         Args:
             head: Head entity index
@@ -84,8 +120,12 @@ class DetailedEvaluator:
             # Score all possible tails
             all_scores = self.model.score_t(hr_batch).squeeze(0)  # Shape: (num_entities,)
 
-            # Get the score for the true tail
+            # Get the score for the true tail - THIS IS THE CONVE SCORE
             true_score = all_scores[tail].item()
+
+            # === RANKING COMPUTATION STARTS HERE ===
+            # Everything below this line is for computing rank/hits@k metrics
+            # If you only need the score, use score_triple() instead
 
             # Filter known triples if requested
             if self.filter_triples and known_triples is not None:
@@ -94,7 +134,7 @@ class DetailedEvaluator:
                     if h == head and r == relation and t != tail:
                         all_scores[t] = float('-inf')
 
-            # Get ranking
+            # Get ranking - EXPENSIVE: sorts all entity scores
             sorted_indices = torch.argsort(all_scores, descending=True)
             rank = (sorted_indices == tail).nonzero(as_tuple=True)[0].item() + 1
 
@@ -123,6 +163,77 @@ class DetailedEvaluator:
 
         return results
 
+    def score_dataset(
+        self,
+        test_triples: CoreTriplesFactory,
+        output_path: Optional[str] = None,
+        include_labels: bool = True
+    ) -> List[Dict[str, any]]:
+        """Get ConvE scores for all test triples WITHOUT computing rankings.
+
+        This is MUCH faster than evaluate_dataset() when you only need scores.
+        Use this when you don't need rank, MRR, or hits@k metrics.
+
+        Args:
+            test_triples: Test triples factory
+            output_path: Optional path to save scores (JSON and CSV)
+            include_labels: If True, include entity/relation names in addition to IDs
+
+        Returns:
+            List of dictionaries with head, relation, tail, and score
+        """
+        logger.info(f"Scoring {len(test_triples)} test triples (no ranking)...")
+
+        # Get ID-to-label mappings if labels requested
+        if include_labels:
+            # Create reverse mappings: id -> label
+            id_to_entity = {v: k for k, v in test_triples.entity_to_id.items()}
+            id_to_relation = {v: k for k, v in test_triples.relation_to_id.items()}
+
+        # Score each triple
+        results = []
+        for h, r, t in tqdm(test_triples.mapped_triples, desc="Scoring"):
+            h, r, t = int(h), int(r), int(t)
+            score = self.score_triple(h, r, t)
+
+            result = {
+                'head_id': h,
+                'relation_id': r,
+                'tail_id': t,
+                'score': score
+            }
+
+            # Add labels if requested
+            if include_labels:
+                result['head_label'] = id_to_entity.get(h, f'UNKNOWN_{h}')
+                result['relation_label'] = id_to_relation.get(r, f'UNKNOWN_{r}')
+                result['tail_label'] = id_to_entity.get(t, f'UNKNOWN_{t}')
+
+            results.append(result)
+
+        logger.info(f"Scored {len(results)} triples")
+
+        # Save results if path provided
+        if output_path:
+            with open(output_path, 'w') as f:
+                json.dump(results, f, indent=2)
+            logger.info(f"Saved scores to {output_path}")
+
+            # Also save as CSV
+            csv_path = output_path.replace('.json', '.csv')
+            df = pd.DataFrame(results)
+            # Reorder columns for better readability
+            if include_labels:
+                column_order = ['head_id', 'head_label', 'relation_id', 'relation_label',
+                               'tail_id', 'tail_label', 'score']
+            else:
+                column_order = ['head_id', 'relation_id', 'tail_id', 'score']
+            df = df[column_order]
+            df.to_csv(csv_path, index=False)
+            logger.info(f"Saved CSV scores to {csv_path}")
+
+        return results
+
     def evaluate_dataset(
         self,
         test_triples: CoreTriplesFactory,
@@ -130,7 +241,10 @@ class DetailedEvaluator:
         validation_triples: Optional[CoreTriplesFactory] = None,
         output_path: Optional[str] = None
     ) -> Dict[str, any]:
-        """Evaluate all triples in test set.
+        """Evaluate all triples in test set WITH full ranking metrics.
+
+        This computes ranks which is expensive. If you only need scores,
+        use score_dataset() instead for much faster execution.
 
         Args:
             test_triples: Test triples factory

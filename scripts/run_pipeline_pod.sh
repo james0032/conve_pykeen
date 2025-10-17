@@ -197,6 +197,7 @@ if [ "$START_STEP" -le 2 ] && [ "$END_STEP" -ge 2 ]; then
 
     python src/prepare_dict.py \
         --input-dir ${OUTPUT_BASE} \
+        --nodes-file ${NODE_FILE} \
         --log-level ${LOG_LEVEL}
 
     STEP2_END=$(date +%s)
@@ -206,7 +207,7 @@ if [ "$START_STEP" -le 2 ] && [ "$END_STEP" -ge 2 ]; then
     echo ""
     echo "✓ Step 2 completed in ${STEP2_TIME} seconds"
     echo "Output files:"
-    ls -lh ${OUTPUT_BASE}/node_dict.txt ${OUTPUT_BASE}/rel_dict.txt
+    ls -lh ${OUTPUT_BASE}/node_dict.txt ${OUTPUT_BASE}/node_name_dict.txt ${OUTPUT_BASE}/rel_dict.txt
     echo ""
 else
     echo "Skipping Step 2 (Prepare dictionaries)"

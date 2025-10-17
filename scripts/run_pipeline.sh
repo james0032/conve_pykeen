@@ -127,6 +127,7 @@ STEP2_START=$(date +%s)
 
 python src/prepare_dict.py \
     --input-dir ${OUTPUT_BASE} \
+    --nodes-file ${NODE_FILE} \
     --log-level ${LOG_LEVEL}
 
 STEP2_END=$(date +%s)
@@ -135,7 +136,7 @@ STEP2_TIME=$((STEP2_END - STEP2_START))
 echo ""
 echo "✓ Step 2 completed in ${STEP2_TIME} seconds"
 echo "Output files:"
-ls -lh ${OUTPUT_BASE}/node_dict.txt ${OUTPUT_BASE}/rel_dict.txt
+ls -lh ${OUTPUT_BASE}/node_dict.txt ${OUTPUT_BASE}/node_name_dict.txt ${OUTPUT_BASE}/rel_dict.txt
 echo ""
 
 # ============================================================================

@@ -12,7 +12,8 @@ Input:
 - edge_map.json: JSON mapping of predicate details to predicate IDs
 
 Output:
-- node_dict.txt: Entity to index mapping
+- node_dict.txt: Entity ID (CURIE) to index mapping
+- node_name_dict.txt: Entity name to index mapping
 - rel_dict.txt: Relation to index mapping
 - Statistics about the graph
 """
@@ -99,6 +100,45 @@ def extract_entities_and_relations(
     return entities, relations, triple_count
 
 
+def load_entity_names(nodes_file: str) -> Dict[str, str]:
+    """Load entity ID to name mapping from nodes.jsonl file.
+
+    Args:
+        nodes_file: Path to nodes.jsonl file
+
+    Returns:
+        Dictionary mapping entity ID (CURIE) to entity name
+    """
+    logger.info(f"Loading entity names from {nodes_file}")
+
+    id_to_name = {}
+
+    if not os.path.exists(nodes_file):
+        logger.warning(f"Nodes file not found: {nodes_file}")
+        return id_to_name
+
+    with open(nodes_file, 'r') as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                node = json.loads(line)
+                node_id = node.get('id')
+                node_name = node.get('name')
+
+                if node_id and node_name:
+                    id_to_name[node_id] = node_name
+
+            except json.JSONDecodeError as e:
+                logger.warning(f"Line {line_num}: Failed to parse JSON: {e}")
+                continue
+
+    logger.info(f"Loaded {len(id_to_name)} entity names")
+    return id_to_name
+
+
 def create_node_dict(entities: Set[str], output_path: str) -> Dict[str, int]:
     """Create node dictionary mapping entities to indices.
 
@@ -123,6 +163,108 @@ def create_node_dict(entities: Set[str], output_path: str) -> Dict[str, int]:
 
     logger.info(f"Node dictionary created with {len(node_dict)} entities")
     return node_dict
+
+
+def create_node_name_dict(
+    node_dict: Dict[str, int],
+    id_to_name: Dict[str, str],
+    output_path: str
+):
+    """Create node name dictionary mapping entity names to indices.
+
+    Args:
+        node_dict: Dictionary mapping entity ID to index
+        id_to_name: Dictionary mapping entity ID to entity name
+        output_path: Path to save node_name_dict.txt
+    """
+    logger.info("Creating node name dictionary...")
+
+    with open(output_path, 'w') as f:
+        for entity_id, idx in node_dict.items():
+            entity_name = id_to_name.get(entity_id, entity_id)  # Use ID if name not found
+            f.write(f"{entity_name}\t{idx}\n")
+
+    logger.info(f"Node name dictionary created: {output_path}")
+    logger.info(f"  Entities with names: {sum(1 for eid in node_dict if eid in id_to_name)}/{len(node_dict)}")
+
+
+def validate_node_dicts(node_dict_path: str, node_name_dict_path: str) -> bool:
+    """Validate that indices match between node_dict.txt and node_name_dict.txt.
+
+    Args:
+        node_dict_path: Path to node_dict.txt
+        node_name_dict_path: Path to node_name_dict.txt
+
+    Returns:
+        True if validation passes, False otherwise
+    """
+    logger.info("Validating node dictionary consistency...")
+
+    # Load both dictionaries
+    node_dict_indices = {}  # entity_id -> index
+    node_name_dict_indices = {}  # entity_name -> index
+
+    # Load node_dict.txt
+    with open(node_dict_path, 'r') as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split('\t')
+            if len(parts) != 2:
+                logger.warning(f"node_dict.txt line {line_num}: Invalid format")
+                continue
+            entity_id, idx = parts
+            node_dict_indices[entity_id] = int(idx)
+
+    # Load node_name_dict.txt
+    with open(node_name_dict_path, 'r') as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split('\t')
+            if len(parts) != 2:
+                logger.warning(f"node_name_dict.txt line {line_num}: Invalid format")
+                continue
+            entity_name, idx = parts
+            node_name_dict_indices[entity_name] = int(idx)
+
+    # Check that both files have the same number of entries
+    if len(node_dict_indices) != len(node_name_dict_indices):
+        logger.error(f"❌ Size mismatch: node_dict has {len(node_dict_indices)} entries, "
+                    f"node_name_dict has {len(node_name_dict_indices)} entries")
+        return False
+
+    # Check that all indices in node_dict appear in node_name_dict
+    node_dict_idx_set = set(node_dict_indices.values())
+    node_name_dict_idx_set = set(node_name_dict_indices.values())
+
+    if node_dict_idx_set != node_name_dict_idx_set:
+        missing_in_name = node_dict_idx_set - node_name_dict_idx_set
+        missing_in_id = node_name_dict_idx_set - node_dict_idx_set
+
+        if missing_in_name:
+            logger.error(f"❌ Indices in node_dict but not in node_name_dict: {sorted(list(missing_in_name))[:10]}...")
+        if missing_in_id:
+            logger.error(f"❌ Indices in node_name_dict but not in node_dict: {sorted(list(missing_in_id))[:10]}...")
+        return False
+
+    # Check for duplicate indices
+    if len(node_dict_idx_set) != len(node_dict_indices):
+        logger.error(f"❌ node_dict.txt has duplicate indices")
+        return False
+
+    if len(node_name_dict_idx_set) != len(node_name_dict_indices):
+        logger.error(f"❌ node_name_dict.txt has duplicate indices")
+        return False
+
+    # All checks passed
+    logger.info(f"✓ Validation passed!")
+    logger.info(f"  Both dictionaries have {len(node_dict_indices)} entries")
+    logger.info(f"  All indices match (0 to {max(node_dict_idx_set)})")
+
+    return True
 
 
 def create_rel_dict(relations: Set[str], output_path: str) -> Dict[str, int]:
@@ -239,7 +381,8 @@ Input files:
   - edge_map.json: JSON mapping of predicate details to predicate IDs
 
 Output files:
-  - node_dict.txt: Entity to index mapping (entity\tindex)
+  - node_dict.txt: Entity ID (CURIE) to index mapping (entity_id\tindex)
+  - node_name_dict.txt: Entity name to index mapping (entity_name\tindex)
   - rel_dict.txt: Relation to index mapping (relation\tindex)
 
 Examples:
@@ -273,6 +416,13 @@ Examples:
         type=str,
         default=None,
         help='Path to edge_map.json file (optional)'
+    )
+
+    parser.add_argument(
+        '--nodes-file',
+        type=str,
+        default=None,
+        help='Path to nodes.jsonl file for entity names (optional, default: robokop/nodes.jsonl)'
     )
 
     parser.add_argument(
@@ -345,6 +495,12 @@ def main():
         else:
             edge_map_file = os.path.join(input_dir, 'edge_map.json')
 
+        # Determine nodes file path
+        if args.nodes_file:
+            nodes_file = args.nodes_file
+        else:
+            nodes_file = 'robokop/nodes.jsonl'
+
         # Determine output directory
         if args.output_dir:
             output_dir = args.output_dir
@@ -358,6 +514,7 @@ def main():
         logger.info("Configuration:")
         logger.info(f"  Triples file: {triples_file}")
         logger.info(f"  Edge map file: {edge_map_file}")
+        logger.info(f"  Nodes file: {nodes_file}")
         logger.info(f"  Output directory: {output_dir}")
         logger.info("=" * 80)
 
@@ -380,12 +537,26 @@ def main():
             logger.error("No entities or relations found in triples file")
             return 1
 
+        # Load entity names from nodes file
+        id_to_name = load_entity_names(nodes_file)
+
         # Create dictionaries
         node_dict_path = os.path.join(output_dir, args.node_dict_name)
         rel_dict_path = os.path.join(output_dir, args.rel_dict_name)
+        node_name_dict_path = os.path.join(output_dir, 'node_name_dict.txt')
 
         node_dict = create_node_dict(entities, node_dict_path)
         rel_dict = create_rel_dict(relations, rel_dict_path)
+
+        # Create node name dictionary
+        create_node_name_dict(node_dict, id_to_name, node_name_dict_path)
+
+        # Validate that indices match between node_dict and node_name_dict
+        logger.info("")
+        validation_passed = validate_node_dicts(node_dict_path, node_name_dict_path)
+        if not validation_passed:
+            logger.error("Dictionary validation failed!")
+            return 1
 
         # Analyze statistics
         if not args.skip_stats:
@@ -393,7 +564,8 @@ def main():
 
         logger.info("\n" + "=" * 80)
         logger.info("Dictionary preparation complete!")
-        logger.info(f"  Node dictionary: {node_dict_path}")
+        logger.info(f"  Node dictionary (ID to index): {node_dict_path}")
+        logger.info(f"  Node name dictionary (name to index): {node_name_dict_path}")
         logger.info(f"  Relation dictionary: {rel_dict_path}")
         logger.info("=" * 80)
 
