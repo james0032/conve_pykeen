@@ -179,21 +179,59 @@ def create_node_name_dict(
     """
     logger.info("Creating node name dictionary...")
 
+    # Track potential issues
+    names_with_tabs = 0
+    names_with_newlines = 0
+    duplicate_names = {}
+
     with open(output_path, 'w') as f:
         for entity_id, idx in node_dict.items():
             entity_name = id_to_name.get(entity_id, entity_id)  # Use ID if name not found
+
+            # Check for problematic characters
+            if '\t' in entity_name:
+                names_with_tabs += 1
+                # Replace tabs with spaces
+                entity_name = entity_name.replace('\t', ' ')
+            if '\n' in entity_name or '\r' in entity_name:
+                names_with_newlines += 1
+                # Replace newlines with spaces
+                entity_name = entity_name.replace('\n', ' ').replace('\r', ' ')
+
+            # Track duplicate names
+            if entity_name in duplicate_names:
+                duplicate_names[entity_name].append(entity_id)
+            else:
+                duplicate_names[entity_name] = [entity_id]
+
             f.write(f"{entity_name}\t{idx}\n")
 
     logger.info(f"Node name dictionary created: {output_path}")
     logger.info(f"  Entities with names: {sum(1 for eid in node_dict if eid in id_to_name)}/{len(node_dict)}")
 
+    if names_with_tabs > 0:
+        logger.warning(f"  Replaced tabs in {names_with_tabs} entity names")
+    if names_with_newlines > 0:
+        logger.warning(f"  Replaced newlines in {names_with_newlines} entity names")
 
-def validate_node_dicts(node_dict_path: str, node_name_dict_path: str) -> bool:
+    # Count duplicate names
+    duplicates = {name: ids for name, ids in duplicate_names.items() if len(ids) > 1}
+    if duplicates:
+        logger.warning(f"  Found {len(duplicates)} duplicate entity names (multiple CURIEs map to same name)")
+        logger.warning(f"  Examples of duplicates:")
+        for i, (name, ids) in enumerate(list(duplicates.items())[:5]):
+            logger.warning(f"    '{name}' -> {len(ids)} entities: {ids[:3]}...")
+            if i >= 4:
+                break
+
+
+def validate_node_dicts(node_dict_path: str, node_name_dict_path: str, strict: bool = False) -> bool:
     """Validate that indices match between node_dict.txt and node_name_dict.txt.
 
     Args:
         node_dict_path: Path to node_dict.txt
         node_name_dict_path: Path to node_name_dict.txt
+        strict: If True, fail on duplicate names; if False, warn but continue
 
     Returns:
         True if validation passes, False otherwise
@@ -202,7 +240,7 @@ def validate_node_dicts(node_dict_path: str, node_name_dict_path: str) -> bool:
 
     # Load both dictionaries
     node_dict_indices = {}  # entity_id -> index
-    node_name_dict_indices = {}  # entity_name -> index
+    node_name_dict_entries = []  # list of (entity_name, index) to handle duplicates
 
     # Load node_dict.txt
     with open(node_dict_path, 'r') as f:
@@ -217,7 +255,7 @@ def validate_node_dicts(node_dict_path: str, node_name_dict_path: str) -> bool:
             entity_id, idx = parts
             node_dict_indices[entity_id] = int(idx)
 
-    # Load node_name_dict.txt
+    # Load node_name_dict.txt - track ALL entries including duplicates
     with open(node_name_dict_path, 'r') as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
@@ -228,18 +266,27 @@ def validate_node_dicts(node_dict_path: str, node_name_dict_path: str) -> bool:
                 logger.warning(f"node_name_dict.txt line {line_num}: Invalid format")
                 continue
             entity_name, idx = parts
-            node_name_dict_indices[entity_name] = int(idx)
+            node_name_dict_entries.append((entity_name, int(idx)))
 
-    # Check that both files have the same number of entries
-    if len(node_dict_indices) != len(node_name_dict_indices):
+    # Count unique names
+    unique_names = len(set(name for name, _ in node_name_dict_entries))
+    total_entries = len(node_name_dict_entries)
+
+    logger.info(f"  node_dict.txt: {len(node_dict_indices)} entries")
+    logger.info(f"  node_name_dict.txt: {total_entries} total entries, {unique_names} unique names")
+
+    # Check if counts match
+    if len(node_dict_indices) != total_entries:
+        size_diff = len(node_dict_indices) - total_entries
         logger.error(f"❌ Size mismatch: node_dict has {len(node_dict_indices)} entries, "
-                    f"node_name_dict has {len(node_name_dict_indices)} entries")
+                    f"node_name_dict has {total_entries} entries (diff: {size_diff})")
         return False
 
-    # Check that all indices in node_dict appear in node_name_dict
+    # Get all indices from both files
     node_dict_idx_set = set(node_dict_indices.values())
-    node_name_dict_idx_set = set(node_name_dict_indices.values())
+    node_name_dict_idx_set = set(idx for _, idx in node_name_dict_entries)
 
+    # Check that all indices match
     if node_dict_idx_set != node_name_dict_idx_set:
         missing_in_name = node_dict_idx_set - node_name_dict_idx_set
         missing_in_id = node_name_dict_idx_set - node_dict_idx_set
@@ -250,19 +297,24 @@ def validate_node_dicts(node_dict_path: str, node_name_dict_path: str) -> bool:
             logger.error(f"❌ Indices in node_name_dict but not in node_dict: {sorted(list(missing_in_id))[:10]}...")
         return False
 
-    # Check for duplicate indices
+    # Check for duplicate indices in node_dict
     if len(node_dict_idx_set) != len(node_dict_indices):
         logger.error(f"❌ node_dict.txt has duplicate indices")
         return False
 
-    if len(node_name_dict_idx_set) != len(node_name_dict_indices):
-        logger.error(f"❌ node_name_dict.txt has duplicate indices")
-        return False
+    # Check for duplicate names (multiple CURIEs -> same name)
+    duplicate_count = total_entries - unique_names
+    if duplicate_count > 0:
+        msg = f"Found {duplicate_count} duplicate entity names in node_name_dict.txt"
+        if strict:
+            logger.error(f"❌ {msg}")
+            return False
+        else:
+            logger.warning(f"⚠️  {msg} (this is OK - multiple CURIEs can have the same name)")
 
-    # All checks passed
+    # All critical checks passed
     logger.info(f"✓ Validation passed!")
-    logger.info(f"  Both dictionaries have {len(node_dict_indices)} entries")
-    logger.info(f"  All indices match (0 to {max(node_dict_idx_set)})")
+    logger.info(f"  All {len(node_dict_indices)} indices match (0 to {max(node_dict_idx_set)})")
 
     return True
 
