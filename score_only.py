@@ -119,13 +119,13 @@ def main():
         entity_map_path = args.entity_to_id
     else:
         entity_map_path = test_dir / 'entity_to_id.tsv'
-    entity_to_id = pickle.load(open(entity_map_path, "rb"))
+    entity_to_id = pickle.load(open(entity_map_path, "r"))
     
     if args.relation_to_id:
         relation_map_path = args.relation_to_id
     else:
         relation_map_path = test_dir / 'relation_to_id.tsv'
-    relation_to_id = pickle.load(open(relation_map_path, "rb"))
+    relation_to_id = pickle.load(open(relation_map_path, "r"))
 
     if args.node_name_dict:
         node_name_dict_path = args.node_name_dict
