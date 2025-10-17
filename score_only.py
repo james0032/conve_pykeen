@@ -106,7 +106,7 @@ def main():
     # Load model
     logger.info(f"Loading model from {args.model_dir}...")
     model_path = Path(args.model_dir) / 'trained_model.pkl'
-    model = torch.load(model_path)
+    model = torch.load(args.model_dir)
     logger.info(f"Model loaded: {model}")
 
     # Load test triples
