@@ -247,7 +247,7 @@ class TracInAnalyzer:
 
         analysis = {
             'num_test_triples': len(results),
-            'num_training_triples': len(training_triples),
+            'num_training_triples': training_triples.num_triples,
             'top_k': top_k,
             'learning_rate': learning_rate,
             'results': results
