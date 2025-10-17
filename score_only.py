@@ -201,8 +201,7 @@ def main():
     # Create model with correct architecture
     logger.info(f"Creating ConvE model...")
     model = ConvE(
-        num_entities=test_triples.num_entities,
-        num_relations=test_triples.num_relations,
+        triples_factory=test_triples,
         embedding_dim=embedding_dim,
         output_channels=output_channels
     )
