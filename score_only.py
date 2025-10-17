@@ -14,12 +14,12 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict
-import pickle
 
 import pandas as pd
 import torch
+from pykeen.models import ConvE
 from pykeen.triples import TriplesFactory
-from pykeen.pipeline import PipelineResult
+
 from evaluate import DetailedEvaluator
 
 logging.basicConfig(
@@ -104,12 +104,32 @@ def main():
 
     args = parser.parse_args()
 
-    # Load model
-    logger.info(f"Loading model from {args.model_dir}...")
-    model_path = Path(args.model_dir) / 'trained_model.pkl'
-    #model = torch.load(args.model_dir)
-    model = PipelineResult.from_directory(args.model_dir)
-    logger.info(f"Model loaded: {model}")
+    # Determine model path
+    model_path = Path(args.model_dir)
+
+    # If args.model_dir is a file, use it directly
+    if model_path.is_file():
+        model_file = model_path
+    # If it's a directory, look for best_model.pt or final_model.pt
+    elif model_path.is_dir():
+        if (model_path / 'best_model.pt').exists():
+            model_file = model_path / 'best_model.pt'
+            logger.info(f"Found best_model.pt in {args.model_dir}")
+        elif (model_path / 'final_model.pt').exists():
+            model_file = model_path / 'final_model.pt'
+            logger.info(f"Found final_model.pt in {args.model_dir}")
+        elif (model_path / 'trained_model.pkl').exists():
+            model_file = model_path / 'trained_model.pkl'
+            logger.info(f"Found trained_model.pkl in {args.model_dir}")
+        else:
+            logger.error(f"No model file found in {args.model_dir}")
+            logger.error(f"Looking for: best_model.pt, final_model.pt, or trained_model.pkl")
+            return
+    else:
+        logger.error(f"Model path does not exist: {args.model_dir}")
+        return
+
+    logger.info(f"Loading model from {model_file}...")
 
     # Load test triples
     logger.info(f"Loading test triples from {args.test}...")
@@ -147,14 +167,54 @@ def main():
         entity_to_id=entity_to_id,
         relation_to_id=relation_to_id
     )
-    logger.info(f"Loaded {(test_triples.num_triples)} test triples")
+    logger.info(f"Loaded {test_triples.num_triples} test triples")
+    logger.info(f"Number of entities: {test_triples.num_entities}")
+    logger.info(f"Number of relations: {test_triples.num_relations}")
 
     # Load entity names
     idx_to_name = load_node_names(str(node_name_dict_path))
 
+    # Load the model checkpoint
+    checkpoint = torch.load(model_file, map_location='cpu')
+
+    # Determine if this is a state_dict only or a full checkpoint
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        # Full checkpoint with metadata
+        state_dict = checkpoint['model_state_dict']
+        embedding_dim = checkpoint.get('config', {}).get('embedding_dim', 200)
+        output_channels = checkpoint.get('config', {}).get('output_channels', 32)
+        logger.info(f"Loaded checkpoint with embedding_dim={embedding_dim}")
+    elif isinstance(checkpoint, dict):
+        # Just a state_dict
+        state_dict = checkpoint
+        # Try to infer embedding_dim from state_dict
+        if 'entity_embeddings.weight' in state_dict:
+            embedding_dim = state_dict['entity_embeddings.weight'].shape[1]
+        else:
+            embedding_dim = 200  # default
+        output_channels = 32  # default
+        logger.info(f"Loaded state dict, inferred embedding_dim={embedding_dim}")
+    else:
+        logger.error(f"Unknown checkpoint format")
+        return
+
+    # Create model with correct architecture
+    logger.info(f"Creating ConvE model...")
+    model = ConvE(
+        num_entities=test_triples.num_entities,
+        num_relations=test_triples.num_relations,
+        embedding_dim=embedding_dim,
+        output_channels=output_channels
+    )
+
+    # Load state dict into model
+    model.load_state_dict(state_dict)
+    model.eval()
+    logger.info(f"Model loaded successfully")
+
     # Create evaluator
     evaluator = DetailedEvaluator(
-        model=model.model,
+        model=model,
         filter_triples=False,  # No filtering needed for score-only
         device=args.device
     )
