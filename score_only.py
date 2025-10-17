@@ -14,6 +14,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict
+import pickle
 
 import pandas as pd
 import torch
@@ -118,11 +119,13 @@ def main():
         entity_map_path = args.entity_to_id
     else:
         entity_map_path = test_dir / 'entity_to_id.tsv'
-
+    entity_to_id = pickle.load(open(entity_map_path, "rb"))
+    
     if args.relation_to_id:
         relation_map_path = args.relation_to_id
     else:
         relation_map_path = test_dir / 'relation_to_id.tsv'
+    relation_to_id = pickle.load(open(relation_map_path, "rb"))
 
     if args.node_name_dict:
         node_name_dict_path = args.node_name_dict
@@ -131,8 +134,8 @@ def main():
 
     test_triples = TriplesFactory.from_path(
         path=args.test,
-        entity_to_id=entity_map_path,
-        relation_to_id=relation_map_path
+        entity_to_id=entity_to_id,
+        relation_to_id=relation_to_id
     )
     logger.info(f"Loaded {len(test_triples)} test triples")
 
