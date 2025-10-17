@@ -19,7 +19,7 @@ import pickle
 import pandas as pd
 import torch
 from pykeen.triples import TriplesFactory
-from pykeen.models import Model
+from pykeen.pipeline import PipelineResult
 from evaluate import DetailedEvaluator
 
 logging.basicConfig(
@@ -108,7 +108,7 @@ def main():
     logger.info(f"Loading model from {args.model_dir}...")
     model_path = Path(args.model_dir) / 'trained_model.pkl'
     #model = torch.load(args.model_dir)
-    model = Model.from_directory(args.model_dir)
+    model = PipelineResult.from_directory(args.model_dir)
     logger.info(f"Model loaded: {model}")
 
     # Load test triples
