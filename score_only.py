@@ -145,32 +145,25 @@ def main():
         entity_map_path = args.entity_to_id
     else:
         entity_map_path = test_dir / 'entity_to_id.tsv'
-    entity_to_id = {}
-    with open(entity_map_path, "r", encoding="utf-8") as f:
-        for line in f:
-            key, value = line.strip().split("\t")
-            entity_to_id[key] = value
-    
+
     if args.relation_to_id:
         relation_map_path = args.relation_to_id
     else:
         relation_map_path = test_dir / 'relation_to_id.tsv'
-    relation_to_id = {}
-    with open(relation_map_path, "r", encoding="utf-8") as f:
-        for line in f:
-            key, value = line.strip().split("\t")
-            relation_to_id[key] = value
-
 
     if args.node_name_dict:
         node_name_dict_path = args.node_name_dict
     else:
         node_name_dict_path = test_dir / 'node_name_dict.txt'
 
+    # Load test triples using the SAME entity/relation mappings from training
+    logger.info(f"Loading entity mappings from {entity_map_path}")
+    logger.info(f"Loading relation mappings from {relation_map_path}")
+
     test_triples = TriplesFactory.from_path(
         path=args.test,
-        entity_to_id=entity_to_id,
-        relation_to_id=relation_to_id
+        entity_to_id=entity_map_path,
+        relation_to_id=relation_map_path
     )
     logger.info(f"Loaded {test_triples.num_triples} test triples")
     logger.info(f"Number of entities: {test_triples.num_entities}")
