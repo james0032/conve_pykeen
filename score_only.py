@@ -153,7 +153,7 @@ def main():
 
     # Create evaluator
     evaluator = DetailedEvaluator(
-        model=model.state_dict(),
+        model=model.model_state_dict,
         filter_triples=False,  # No filtering needed for score-only
         device=args.device
     )
