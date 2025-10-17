@@ -133,7 +133,7 @@ def main():
     with open(relation_map_path, "r", encoding="utf-8") as f:
         for line in f:
             key, value = line.strip().split("\t")
-            relation_map_path[key] = value
+            relation_to_id[key] = value
 
 
     if args.node_name_dict:
