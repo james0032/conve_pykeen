@@ -36,7 +36,8 @@ class DetailedEvaluator:
         model: Model,
         batch_size: int = 32,
         filter_triples: bool = True,
-        device: Optional[str] = None
+        device: Optional[str] = None,
+        use_sigmoid: bool = False
     ):
         """Initialize evaluator.
 
@@ -45,11 +46,13 @@ class DetailedEvaluator:
             batch_size: Batch size for evaluation
             filter_triples: Whether to filter known triples during ranking
             device: Device to run evaluation on
+            use_sigmoid: If True, apply sigmoid to convert logits to probabilities [0, 1]
         """
         self.model = model
         self.batch_size = batch_size
         self.filter_triples = filter_triples
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        self.use_sigmoid = use_sigmoid
         self.model.to(self.device)
 
     def score_triple(
@@ -69,7 +72,8 @@ class DetailedEvaluator:
             tail: Tail entity index
 
         Returns:
-            Model score for the triple (higher = more confident)
+            Model score for the triple. If use_sigmoid=True, returns probability [0, 1].
+            Otherwise returns raw logit (can be negative).
         """
         self.model.eval()
 
@@ -77,11 +81,17 @@ class DetailedEvaluator:
             # Create batch with single triple
             hr_batch = torch.LongTensor([[head, relation]]).to(self.device)
 
-            # Score all possible tails
+            # Score all possible tails - returns LOGITS (raw scores, can be negative)
             all_scores = self.model.score_t(hr_batch).squeeze(0)  # Shape: (num_entities,)
 
-            # Get the score for the true tail - THIS IS THE CONVE SCORE
-            true_score = all_scores[tail].item()
+            # Get the score for the true tail
+            true_score = all_scores[tail]
+
+            # Apply sigmoid to convert logit to probability if requested
+            if self.use_sigmoid:
+                true_score = torch.sigmoid(true_score)
+
+            true_score = true_score.item()
 
         return true_score
 

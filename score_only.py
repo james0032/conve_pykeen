@@ -101,6 +101,11 @@ def main():
         default=None,
         help='Device to use (cuda/cpu, default: auto-detect)'
     )
+    parser.add_argument(
+        '--use-sigmoid',
+        action='store_true',
+        help='Apply sigmoid to convert scores to probabilities [0, 1] (default: False, returns raw logits)'
+    )
 
     args = parser.parse_args()
 
@@ -215,8 +220,12 @@ def main():
     evaluator = DetailedEvaluator(
         model=model,
         filter_triples=False,  # No filtering needed for score-only
-        device=args.device
+        device=args.device,
+        use_sigmoid=args.use_sigmoid
     )
+
+    score_type = "probabilities (0-1)" if args.use_sigmoid else "logits (can be negative)"
+    logger.info(f"Scoring mode: {score_type}")
 
     # Score all test triples WITHOUT computing rankings
     logger.info("Scoring test triples (this will be FAST - no ranking computation)...")
